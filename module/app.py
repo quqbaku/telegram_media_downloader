@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import re
 import time
 from asyncio import Lock
 from concurrent.futures import ThreadPoolExecutor
@@ -714,6 +715,17 @@ class Application:
 
         return ret
 
+    # Windows invalid filename characters: # < > : " / \ | ? * and control chars
+    _INVALID_PATH_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+    def _sanitize_path_component(self, s: str) -> str:
+        """Remove Windows-invalid characters from a path component."""
+        if not s:
+            return s
+        s = self._INVALID_PATH_CHARS.sub(' ', s)
+        s = ' '.join(s.split())
+        return s.strip()
+
     def get_file_save_path(
         self, media_type: str, chat_title: str, media_datetime: str
     ) -> str:
@@ -739,7 +751,7 @@ class Application:
         res: str = self.save_path
         for prefix in self.file_path_prefix:
             if prefix == "chat_title":
-                res = os.path.join(res, chat_title)
+                res = os.path.join(res, self._sanitize_path_component(chat_title))
             elif prefix == "media_datetime":
                 res = os.path.join(res, media_datetime)
             elif prefix == "media_type":
@@ -1087,9 +1099,9 @@ class Application:
     def set_config_from_web(self, cfg: dict) -> dict:
         """Apply config updates from the Web UI and persist to YAML."""
         if "save_path" in cfg:
-            self.save_path = cfg["save_path"]
+            self.save_path = self._sanitize_path_component(cfg["save_path"])
         if "temp_save_path" in cfg:
-            self.temp_save_path = cfg["temp_save_path"]
+            self.temp_save_path = self._sanitize_path_component(cfg["temp_save_path"])
         if "api_id" in cfg:
             self.api_id = str(cfg["api_id"])
         if "api_hash" in cfg and cfg["api_hash"]:
